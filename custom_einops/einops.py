@@ -157,6 +157,9 @@ def _process_pattern(
         EinopsError: For invalid patterns or shape mismatches
     """
     # Split and parse both sides of the pattern
+    if pattern.count('->') != 1:
+        raise EinopsError(f"Pattern must contain exactly one '->' separator.")
+        
     lhs_str, rhs_str = pattern.split('->')
     lhs_str = lhs_str.strip()
     rhs_str = rhs_str.strip()
@@ -359,6 +362,8 @@ def rearrange(tensor: np.ndarray, pattern: str, **axes_lengths: int) -> np.ndarr
         raise EinopsError("Pattern must be a string")
     if '->' not in pattern:
         raise EinopsError("Pattern must contain '->' separator")
+    if pattern.count('->') > 1:
+        raise EinopsError("Pattern must contain exactly one '->' separator")
         
     # Parse and process the pattern
     decomposed_lhs, decomposed_rhs, axes_lengths_dict, final_shape, repeat_info = _process_pattern(
@@ -400,16 +405,17 @@ def rearrange(tensor: np.ndarray, pattern: str, **axes_lengths: int) -> np.ndarr
         # Sort by insertion index to maintain proper order
         repeat_axes.sort(key=lambda x: x[0])
         
-        # First, expand dimensions
+        # For complex patterns with multiple repeats, handle each one separately
         for i, (idx, ax) in enumerate(repeat_axes):
-            # Adjust index for previous insertions
-            adjusted_idx = idx + i
+            # Calculate the current tensor shape for correct axis index adjustment
+            current_ndim = result.ndim
+            adjusted_idx = min(idx, current_ndim)
+            
+            # Expand dimension
             result = np.expand_dims(result, axis=adjusted_idx)
-        
-        # Then repeat along each dimension
-        for i, (idx, ax) in enumerate(repeat_axes):
-            adjusted_idx = idx + i
-            if ax in repeat_info:  # Skip _anon_1 which is already size 1
+            
+            # Repeat if needed
+            if ax in repeat_info:
                 repeat_count = repeat_info[ax]
                 result = np.repeat(result, repeat_count, axis=adjusted_idx)
     

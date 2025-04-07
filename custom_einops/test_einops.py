@@ -56,6 +56,23 @@ def test_ellipsis():
     x = np.random.rand(2, 3, 4, 5, 6)
     result = rearrange(x, 'a ... e -> e ... a')
     assert result.shape == (6, 3, 4, 5, 2)
+    
+    # Ellipsis only
+    x = np.random.rand(2, 3, 4)
+    result = rearrange(x, '... -> ...')
+    assert result.shape == (2, 3, 4)
+    assert np.array_equal(result, x)
+    
+    # Ellipsis at different positions
+    x = np.random.rand(2, 3, 4)
+    result = rearrange(x, 'b ... -> ... b')
+    assert result.shape == (3, 4, 2)
+    assert np.array_equal(result, np.transpose(x, (1, 2, 0)))
+    
+    # Ellipsis with splitting
+    x = np.random.rand(2, 3, 10)
+    result = rearrange(x, 'b ... (h w) -> b ... h w', h=2)
+    assert result.shape == (2, 3, 2, 5)
 
 
 def test_repeat_operation():
@@ -78,6 +95,45 @@ def test_repeat_operation():
     # Repeat using explicit number
     result = repeat(x, 'a b -> a b 3')
     assert result.shape == (3, 5, 3)
+    
+    # Repeat at different positions
+    x = np.array([1, 2])
+    result = rearrange(x, 'a -> a 3')
+    expected = np.array([[1, 1, 1], [2, 2, 2]])
+    assert result.shape == expected.shape
+    assert np.array_equal(result, expected)
+    
+    x = np.array([[1, 2], [3, 4]])
+    result = rearrange(x, 'a b -> a b 2')
+    expected = np.array([[[1, 1], [2, 2]], [[3, 3], [4, 4]]])
+    assert result.shape == expected.shape
+    assert np.array_equal(result, expected)
+    
+    x = np.array([[1, 2], [3, 4]])
+    result = rearrange(x, 'a b -> a 2 b')
+    expected = np.array([[[1, 2], [1, 2]], [[3, 4], [3, 4]]])
+    assert result.shape == expected.shape
+    assert np.array_equal(result, expected)
+    
+    x = np.array([[1, 2], [3, 4]])
+    result = rearrange(x, 'a b -> 3 a b')
+    expected = np.array([[[1, 2], [3, 4]], [[1, 2], [3, 4]], [[1, 2], [3, 4]]])
+    assert result.shape == expected.shape
+    assert np.array_equal(result, expected)
+    
+    # Multiple repeats
+    x = np.array([1, 2])
+    result = rearrange(x, 'a -> 2 a 3')
+    expected = np.array([[[1, 1, 1], [2, 2, 2]], [[1, 1, 1], [2, 2, 2]]])
+    assert result.shape == expected.shape
+    assert np.array_equal(result, expected)
+    
+    # Repeat in composition
+    x = np.array([1, 2])
+    result = rearrange(x, 'a -> (a 3)')
+    expected = np.array([1, 1, 1, 2, 2, 2])
+    assert result.shape == expected.shape
+    assert np.array_equal(result, expected)
 
 
 def test_anonymous_axes():
@@ -95,6 +151,21 @@ def test_anonymous_axes():
     # Using numeric literals for repetition
     result = rearrange(x, 'a 1 b -> a 3 b')
     assert result.shape == (3, 3, 5)
+    
+    # Anonymous axis in different positions
+    x = np.arange(6).reshape(2, 1, 3)
+    result = rearrange(x, 'a 1 c -> a c')
+    assert result.shape == (2, 3)
+    assert np.array_equal(result, np.arange(6).reshape(2, 3))
+    
+    x = np.arange(6).reshape(2, 3)
+    result = rearrange(x, 'a c -> a 1 c')
+    assert result.shape == (2, 1, 3)
+    assert np.array_equal(result, np.arange(6).reshape(2, 1, 3))
+    
+    x = np.arange(6).reshape(1, 2, 3)
+    result = rearrange(x, '1 b c -> b 1 c')
+    assert result.shape == (2, 1, 3)
 
 
 def test_complex_patterns():
@@ -112,6 +183,27 @@ def test_complex_patterns():
     expected = original_einops.rearrange(x, '(a b) (c d) e f -> a b (c d e) f', a=2, c=5)
     assert result.shape == expected.shape
     assert np.allclose(result, expected)
+    
+    # Split and merge combinations
+    x = np.arange(12).reshape(6, 2)
+    result = rearrange(x, '(h w) c -> h w c', h=3)
+    assert result.shape == (3, 2, 2)
+    assert np.array_equal(result, np.arange(12).reshape(3, 2, 2))
+    
+    x = np.arange(12).reshape(2, 3, 2)
+    result = rearrange(x, 'a b c -> (a b) c')
+    assert result.shape == (6, 2)
+    assert np.array_equal(result, np.arange(12).reshape(6, 2))
+    
+    x = np.arange(24).reshape(12, 2)
+    result = rearrange(x, '(h w) c -> h (w c)', h=3)
+    assert result.shape == (3, 8)
+    assert np.array_equal(result, np.arange(24).reshape(3, 8))
+    
+    x = np.arange(24).reshape(6, 4)
+    result = rearrange(x, '(a b) c -> a (b c)', a=2)
+    assert result.shape == (2, 12)
+    assert np.array_equal(result, np.arange(24).reshape(2, 12))
 
 
 def test_error_cases():
@@ -141,6 +233,50 @@ def test_error_cases():
     # Ellipsis on RHS but not LHS
     with pytest.raises(EinopsError):
         rearrange(x, 'a b c -> a ... c')
+        
+    # Invalid tensor type
+    with pytest.raises(EinopsError):
+        rearrange([1, 2, 3], 'a -> a')
+        
+    # Multiple separators
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros(1), 'a -> b -> c')
+        
+    # Unbalanced parentheses
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros(1), '(a -> b')
+        
+    # Unbalanced parentheses closing
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros(1), 'a) -> b')
+        
+    # Invalid axes lengths
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros(1), 'a -> b', **{'b': 0})
+        
+    # Multiple ellipsis
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros((2, 3)), '... a ... -> a')
+        
+    # Nested parentheses
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros((2, 3)), 'a (b (c)) -> a b c')
+        
+    # Duplicate identifier
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros((2, 2)), 'a a -> a')
+        
+    # Unknown axis on RHS
+    with pytest.raises(EinopsError):
+        rearrange(np.zeros((2, 3)), 'a b -> a c')
+        
+    # Split axis incompatible shape
+    with pytest.raises(EinopsError):
+        rearrange(np.arange(10).reshape(5, 2), '(h w) c -> h w c', h=3)
+        
+    # Anonymous axis mismatch
+    with pytest.raises(EinopsError):
+        rearrange(np.arange(10).reshape(5, 2), 'a 1 -> a')
 
 
 def test_comparison_with_original():
