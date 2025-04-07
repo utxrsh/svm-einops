@@ -10,6 +10,7 @@ This implementation provides a clean, readable version of the einops pattern-bas
 - Transposition (reordering dimensions)
 - Adding new dimensions
 - Repeating elements along dimensions
+- Complex pattern handling with anonymous dimensions and numeric literals
 
 ## Usage
 
@@ -38,6 +39,14 @@ result = repeat(x, 'a 1 c -> a b c', b=4)
 # Handle batch dimensions
 x = np.random.rand(2, 3, 4, 5)
 result = rearrange(x, '... h w -> ... (h w)')
+
+# Multiple repetitions
+x = np.array([1, 2])
+result = rearrange(x, 'a -> 2 a 3')  # Shape: (2, 2, 3)
+
+# Advanced pattern with composition and repetition
+x = np.array([1, 2])
+result = rearrange(x, 'a -> (a 3)')  # Shape: (6,)
 ```
 
 ### Pattern Syntax
@@ -66,6 +75,8 @@ This implementation focuses on clarity and correctness while maintaining a funct
 4. **Separation of Concerns**: Parsing, validation, and execution are cleanly separated, making the code easier to understand and maintain.
 
 5. **Prioritizing Readability**: While performance is important, we prioritized code clarity to make the implementation educational and maintainable.
+
+6. **Comprehensive Error Handling**: Detailed error messages help users understand issues with their patterns or tensor shapes.
 
 ### Flow of Pattern Processing and Execution
 
@@ -132,9 +143,13 @@ The tests include comparisons with the original einops library to verify correct
 
 ## Performance Considerations
 
-While this implementation prioritizes clarity over optimization, it still performs reasonably well compared to the original einops library. Our benchmarks show:
+This implementation prioritizes clarity and correctness over performance optimization. It may be slower than the original einops library, particularly for complex patterns or large tensors.
 
-- Simple operations (transpose, reshape): 3-5x slower than original einops
-- Complex operations: 5-7x slower than original einops
+Potential optimization strategies include:
 
-This performance difference is acceptable for most use cases, especially considering the educational value of the clean implementation. 
+1. **Caching parsed patterns**: Avoid re-parsing patterns used repeatedly
+2. **Vectorized operations**: Optimize the repeat operations for better performance
+3. **Memory management**: Reduce unnecessary tensor copies
+4. **Just-in-time compilation**: Explore using libraries like Numba for performance-critical sections
+
+These optimizations could be implemented in future iterations while maintaining the clean architecture of the current implementation. 
